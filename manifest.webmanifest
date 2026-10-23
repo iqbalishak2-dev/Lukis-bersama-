@@ -1,32 +1,29 @@
+
 {
   "id": "/",
   "name": "Lukis Bersama",
   "short_name": "Lukis",
-  "description": "Lukis dan bermain bersama rakan dalam bilik yang sama.",
+  "description": "Lukis dan teka bersama rakan secara masa nyata",
+  "lang": "ms",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#faf7f2",
   "theme_color": "#e8590c",
+  "prefer_related_applications": false,
   "icons": [
     {
-      "src": "/icons/icon-192.png",
+      "src": "/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-512.png",
+      "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
-    },
-    {
-      "src": "/icons/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
     }
   ]
 }
