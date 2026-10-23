@@ -2,7 +2,7 @@
 // Jalankan: node server.js   (buka http://localhost:3000)
 const http = require('http');
 const fs = require('fs');
-const path = require('path'); => 
+const path = require('path'); 
 require('./pwa');
 const PORT = process.env.PORT || 3000;
 const ROUND = 80;        // saat setiap giliran
