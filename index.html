@@ -35,11 +35,16 @@ input[type=range]{width:100px;accent-color:var(--accent)}
 .row input{flex:1;min-width:0;border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:10px;padding:10px 12px;font-size:1rem}
 #ov{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;z-index:9}
 #ov input{border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:10px;padding:12px;font-size:1.1rem;width:100%;max-width:300px;text-align:center}
+#ov .row{width:100%;max-width:300px}
+#ov .row input{width:auto;text-transform:uppercase;letter-spacing:.2em}
+#err{color:#e03131;min-height:1.3em;text-align:center;font-size:.9rem}
+#top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+#rcode{font-weight:700;color:var(--accent);letter-spacing:.12em}
 </style>
 </head>
 <body>
-<div id="ov"><h1 style="font-size:1.6rem">🎨 Lukis Bersama</h1><div>Siapa nama anda?</div><input id="nm" maxlength="14" placeholder="Nama anda" autocomplete="off"><button class="p" id="go">Masuk</button></div>
-<h1>🎨 Lukis Bersama</h1>
+<div id="ov"><h1 style="font-size:1.6rem">🎨 Lukis Bersama</h1><input id="nm" maxlength="14" placeholder="Nama anda" autocomplete="off"><button class="p" id="mkb">➕ Buat bilik baharu</button><div style="color:var(--muted)">atau sertai bilik rakan</div><div class="row"><input id="rin" maxlength="4" placeholder="KOD" autocomplete="off"><button class="p" id="jnb">Sertai</button></div><div id="err"></div></div>
+<div class="w" id="top"><h1>🎨 Lukis Bersama</h1><span id="rcode"></span><button class="t" id="shr">🔗 Kongsi</button></div>
 <div class="w" id="pl"></div>
 <div class="w" id="info"><span id="it">Menyambung…</span><button class="p" id="st" style="display:none">Mula main</button></div>
 <div class="w" id="wrap"><canvas id="c" width="1000" height="1000"></canvas><canvas id="pv" width="1000" height="1000"></canvas></div>
@@ -68,6 +73,7 @@ const COLS=["#222222","#868e96","#8d5524","#e03131","#f76707","#fcc419","#8ce99a
 const cv=document.getElementById('c'),ctx=cv.getContext('2d'),pv=document.getElementById('pv'),pctx=pv.getContext('2d');
 [ctx,pctx].forEach(x=>{x.lineCap='round';x.lineJoin='round';});
 const CID=Math.random().toString(36).slice(2,10);
+let ROOM='';
 let NAME='',color=COLS[0],tool='pen',drawing=false,last=null,start=null,curK='',kn=0,buf=[],all=[],S={phase:'lobby',players:[],drawer:null},wordMine='',ends=0;
 const sz=document.getElementById('sz'),wrap=document.getElementById('wrap');
 function canDraw(){return S.phase==='lobby'||(S.phase==='playing'&&S.drawer===CID);}
@@ -77,7 +83,7 @@ function clearC(){ctx.fillStyle='#fff';ctx.fillRect(0,0,1000,1000);}
 function redraw(){clearC();all.forEach(drawItem);}
 function keep(s){all.push(s);if(all.length>80000)all.shift();}
 function pos(e){const r=cv.getBoundingClientRect();return[(e.clientX-r.left)/r.width*1000,(e.clientY-r.top)/r.height*1000];}
-function post(m){m.cid=CID;fetch('/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(m)}).catch(()=>{});}
+function post(m){m.cid=CID;m.room=ROOM;fetch('/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(m)}).catch(()=>{});}
 function mk(a,b,x,y){return{a:Math.round(a),b:Math.round(b),x:Math.round(x),y:Math.round(y),c:color,w:+sz.value,e:0,k:curK};}
 function shapeSegs(t,p,q){
  if(t==='line')return[mk(p[0],p[1],q[0],q[1])];
@@ -136,7 +142,7 @@ setInterval(tick,500);
 const HEX=/^#[0-9a-f]{6}$/i;
 function valid(s){return s&&HEX.test(s.c||'')&&(s.bg===1||[s.a,s.b,s.x,s.y,s.w].every(Number.isFinite));}
 function connect(){
- const es=new EventSource('/events?cid='+CID+'&name='+encodeURIComponent(NAME));
+ const es=new EventSource('/events?cid='+CID+'&name='+encodeURIComponent(NAME)+'&room='+ROOM);
  es.onmessage=ev=>{let m;try{m=JSON.parse(ev.data);}catch(e){return;}
   if(m.t==='init'){all=(m.strokes||[]).filter(valid);redraw();}
   else if(m.t==='lukis'){if(m.cid===CID)return;(m.s||[]).forEach(s=>{if(valid(s)){keep(s);drawItem(s);}});}
@@ -146,14 +152,35 @@ function connect(){
   else if(m.t==='word'){wordMine=String(m.w||'');tick();}
   else if(m.t==='chat')line(m.m,'',m.n);
   else if(m.t==='sys')line(m.m,'sys');};
- es.onerror=()=>{document.getElementById('it').textContent='Terputus, cuba sambung semula…';};
+ es.onerror=()=>{if(es.readyState===2){document.getElementById('ov').style.display='';err('Bilik tidak lagi wujud. Buat atau sertai bilik lain.');}
+  else document.getElementById('it').textContent='Terputus, cuba sambung semula…';};
 }
-const nm=document.getElementById('nm');
+const nm=document.getElementById('nm'),rin=document.getElementById('rin');
+function err(m){document.getElementById('err').textContent=m;}
 try{nm.value=localStorage.getItem('lb_name')||'';}catch(e){}
-function go(){NAME=(nm.value.trim()||('Pemain'+Math.floor(Math.random()*90+10))).slice(0,14);try{localStorage.setItem('lb_name',NAME);}catch(e){}
- document.getElementById('ov').style.display='none';connect();}
-document.getElementById('go').onclick=go;
-nm.addEventListener('keydown',e=>{if(e.key==='Enter')go();});
+const qr=new URLSearchParams(location.search).get('bilik');
+if(qr)rin.value=qr.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,4);
+async function enter(mode){
+ const name=(nm.value.trim()||('Pemain'+Math.floor(Math.random()*90+10))).slice(0,14);
+ err('');
+ try{
+  if(mode==='new'){const r=await(await fetch('/baru')).json();if(!r.ok){err(r.m||'Gagal buat bilik');return;}ROOM=r.code;}
+  else{const c=rin.value.trim().toUpperCase();if(c.length!==4){err('Masukkan kod 4 huruf/angka');return;}
+   const r=await(await fetch('/cek?room='+encodeURIComponent(c))).json();if(!r.ok){err(r.m||'Bilik tidak dijumpai');return;}ROOM=c;}
+ }catch(e){err('Tak dapat sambung ke pelayan');return;}
+ NAME=name;try{localStorage.setItem('lb_name',NAME);}catch(e){}
+ document.getElementById('ov').style.display='none';
+ document.getElementById('rcode').textContent='Bilik: '+ROOM;
+ try{history.replaceState(null,'','/?bilik='+ROOM);}catch(e){}
+ connect();}
+document.getElementById('mkb').onclick=()=>enter('new');
+document.getElementById('jnb').onclick=()=>enter('join');
+rin.addEventListener('keydown',e=>{if(e.key==='Enter')enter('join');});
+nm.addEventListener('keydown',e=>{if(e.key==='Enter')enter(rin.value.trim()?'join':'new');});
+document.getElementById('shr').onclick=()=>{const u=location.origin+'/?bilik='+ROOM,t='Jom lukis bersama! Kod bilik: '+ROOM;
+ if(navigator.share){navigator.share({title:'Lukis Bersama',text:t,url:u}).catch(()=>{});}
+ else if(navigator.clipboard){navigator.clipboard.writeText(t+' '+u).then(()=>line('🔗 Pautan disalin: '+u,'sys')).catch(()=>line('Pautan: '+u,'sys'));}
+ else line('Pautan: '+u,'sys');};
 </script>
 </body>
 </html>
