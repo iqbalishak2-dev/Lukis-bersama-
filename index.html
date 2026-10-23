@@ -256,5 +256,74 @@ if ("serviceWorker" in navigator) {
 })();
 
 </script>
+
+<div id="pwa-diagnostic" style="margin:16px;padding:16px;border:2px solid #e8590c;border-radius:12px;background:#fff;color:#222;font:14px monospace;overflow-wrap:anywhere">
+  <h3>Diagnosis PWA</h3>
+  <p>Sedang menguji...</p>
+</div>
+<script>
+(async function () {
+  const box = document.getElementById('pwa-diagnostic');
+  const results = [];
+
+  function add(name, ok, detail) {
+    results.push((ok ? 'OK' : 'SEMAK') + ' | ' + name + ': ' + detail);
+  }
+
+  add('HTTPS', location.protocol === 'https:',
+      location.protocol);
+
+  const link = document.querySelector('link[rel="manifest"]');
+  add('Manifest link', !!link,
+      link ? link.getAttribute('href') : 'TIADA');
+
+  try {
+    const res = await fetch('/manifest.webmanifest?t=' + Date.now());
+    add('Manifest HTTP', res.ok,
+        'Status ' + res.status);
+
+    if (res.ok) {
+      const m = await res.json();
+      add('Nama aplikasi', !!(m.name || m.short_name),
+          m.name || m.short_name || 'TIADA');
+      add('Start URL', !!m.start_url,
+          m.start_url || 'TIADA');
+      add('Display', ['standalone','fullscreen','minimal-ui'].includes(m.display),
+          m.display || 'TIADA');
+
+      for (const icon of (m.icons || [])) {
+        try {
+          const r = await fetch(icon.src);
+          add('Ikon ' + icon.sizes, r.ok,
+              icon.src + ' — HTTP ' + r.status);
+        } catch (e) {
+          add('Ikon ' + icon.sizes, false, String(e));
+        }
+      }
+    }
+  } catch (e) {
+    add('Manifest', false, String(e));
+  }
+
+  if ('serviceWorker' in navigator) {
+    try {
+      const reg = await navigator.serviceWorker.getRegistration('/');
+      add('Service Worker', !!reg,
+          !reg ? 'Belum didaftarkan' :
+          reg.active ? 'Aktif' :
+          reg.installing ? 'Sedang dipasang' :
+          'Didaftarkan tetapi belum aktif');
+    } catch (e) {
+      add('Service Worker', false, String(e));
+    }
+  } else {
+    add('Service Worker', false, 'Tidak disokong');
+  }
+
+  box.innerHTML = '<h3>Keputusan Diagnosis PWA</h3><pre style="white-space:pre-wrap"></pre>';
+  box.querySelector('pre').textContent = results.join('\n\n');
+})();
+</script>
+</body>
 </body>
 </html>
