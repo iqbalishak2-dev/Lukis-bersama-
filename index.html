@@ -50,6 +50,8 @@ input[type=range]{width:100px;accent-color:var(--accent)}
 <div class="w" id="wrap"><canvas id="c" width="1000" height="1000"></canvas><canvas id="pv" width="1000" height="1000"></canvas></div>
 <div class="w bar" id="tools">
 <button class="t" data-tool="pen">✏️ Pensel</button>
+<button class="t" data-tool="paint">🖌️ Berus cat</button>
+<button class="t" data-tool="spray">💨 Spray</button>
 <button class="t" data-tool="erase">🧽 Padam</button>
 <button class="t" data-tool="line">╱ Garis</button>
 <button class="t" data-tool="rect">▭ Kotak</button>
@@ -92,11 +94,26 @@ function shapeSegs(t,p,q){
  for(let i=0;i<N;i++){const a1=i/N*2*Math.PI,a2=(i+1)/N*2*Math.PI;out.push(mk(cx+rx*Math.cos(a1),cy+ry*Math.sin(a1),cx+rx*Math.cos(a2),cy+ry*Math.sin(a2)));}
  return out;}
 function isShape(){return tool==='line'||tool==='rect'||tool==='circ';}
-cv.addEventListener('pointerdown',e=>{if(!canDraw())return;drawing=true;cv.setPointerCapture(e.pointerId);curK=CID+':'+(++kn);start=pos(e);last=start;if(!isShape())addSeg(start,start);});
+let sprayT=null;
+function shade(h,d){const n=parseInt(h.slice(1),16),f=v=>Math.max(0,Math.min(255,v+d));return '#'+[f(n>>16),f((n>>8)&255),f(n&255)].map(v=>v.toString(16).padStart(2,'0')).join('');}
+function paintSegs(p,q){const dx=q[0]-p[0],dy=q[1]-p[1],L=Math.hypot(dx,dy);let nx=0,ny=1;if(L>=0.5){nx=-dy/L;ny=dx/L;}
+ const W=+sz.value,N=5,out=[];
+ for(let i=0;i<N;i++){const o=(i-(N-1)/2)*W/N;out.push({a:Math.round(p[0]+nx*o),b:Math.round(p[1]+ny*o),x:Math.round(q[0]+nx*o),y:Math.round(q[1]+ny*o),c:shade(color,Math.round((Math.random()-0.5)*44)),w:Math.max(1,Math.round(W/N*1.5)),e:0,k:curK});}
+ return out;}
+function sprayDots(c){const R=+sz.value*2.5+6,out=[];
+ for(let i=0;i<14;i++){const a=Math.random()*6.2832,r=R*Math.sqrt(Math.random()),x=Math.round(c[0]+r*Math.cos(a)),y=Math.round(c[1]+r*Math.sin(a));out.push({a:x,b:y,x:x+1,y:y,c:color,w:2+Math.round(Math.random()*2),e:0,k:curK});}
+ return out;}
+function applySegs(arr){arr.forEach(s=>{seg(s);keep(s);buf.push(s);});}
+cv.addEventListener('pointerdown',e=>{if(!canDraw())return;drawing=true;cv.setPointerCapture(e.pointerId);curK=CID+':'+(++kn);start=pos(e);last=start;
+ if(tool==='paint')applySegs(paintSegs(start,start));
+ else if(tool==='spray'){applySegs(sprayDots(last));clearInterval(sprayT);sprayT=setInterval(()=>{if(drawing)applySegs(sprayDots(last));},45);}
+ else if(!isShape())addSeg(start,start);});
 cv.addEventListener('pointermove',e=>{if(!drawing)return;const p=pos(e);
  if(isShape()){last=p;pctx.clearRect(0,0,1000,1000);shapeSegs(tool,start,p).forEach(s=>seg(s,pctx));}
+ else if(tool==='paint'){applySegs(paintSegs(last,p));last=p;}
+ else if(tool==='spray'){last=p;}
  else{addSeg(last,p);last=p;}});
-function finish(){if(!drawing)return;drawing=false;
+function finish(){if(!drawing)return;drawing=false;clearInterval(sprayT);
  if(isShape()){pctx.clearRect(0,0,1000,1000);shapeSegs(tool,start,last).forEach(s=>{seg(s);keep(s);buf.push(s);});}
  flush();}
 cv.addEventListener('pointerup',finish);
