@@ -205,13 +205,56 @@ document.getElementById('shr').onclick=()=>{const u=location.origin+'/?bilik='+R
  else if(navigator.clipboard){navigator.clipboard.writeText(t+' '+u).then(()=>line('🔗 Pautan disalin: '+u,'sys')).catch(()=>line('Pautan: '+u,'sys'));}
  else line('Pautan: '+u,'sys');};
 // PWA
-if('serviceWorker' in navigator)addEventListener('load',()=>{navigator.serviceWorker.register('/sw.js').catch(()=>{});});
-let ipr=null;
-const ins=document.createElement('button');ins.className='t';ins.textContent='📲 Pasang sebagai app';ins.style.display='none';
-document.getElementById('err').before(ins);
-addEventListener('beforeinstallprompt',e=>{e.preventDefault();ipr=e;ins.style.display='';});
-ins.onclick=async()=>{if(!ipr)return;ipr.prompt();try{await ipr.userChoice;}catch(e){}ipr=null;ins.style.display='none';};
-addEventListener('appinstalled',()=>{ins.style.display='none';});
-if(/iphone|ipad|ipod/i.test(navigator.userAgent)&&!navigator.standalone){const hint=document.createElement('div');hint.style.cssText='color:var(--muted);font-size:.8rem;text-align:center';hint.textContent='iPhone: ketuk Kongsi lalu Tambah ke Skrin Utama untuk pasang app.';document.getElementById('err').before(hint);}</script>
+ 
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker
+      .register("/sw.js")
+      .catch(err => console.error("SW error:", err));
+  });
+}
+
+(() => {
+  if (window.matchMedia("(display-mode: standalone)").matches ||
+      navigator.standalone === true) return;
+
+  const btn = document.createElement("button");
+  btn.textContent = "📲 Pasang sebagai app";
+  btn.className = "t";
+  btn.style.cssText =
+    "position:fixed;bottom:20px;right:12px;z-index:99999;" +
+    "background:#e8590c;color:white;border:0;border-radius:12px;" +
+    "padding:12px 16px;font-weight:bold;box-shadow:0 4px 12px #0003";
+
+  document.body.appendChild(btn);
+
+  let installPrompt = null;
+
+  window.addEventListener("beforeinstallprompt", event => {
+    event.preventDefault();
+    installPrompt = event;
+  });
+
+  window.addEventListener("appinstalled", () => btn.remove());
+
+  btn.addEventListener("click", async () => {
+    if (installPrompt) {
+      const promptEvent = installPrompt;
+      installPrompt = null;
+      await promptEvent.prompt();
+      const choice = await promptEvent.userChoice;
+      if (choice.outcome === "accepted") btn.remove();
+      return;
+    }
+
+    if (/iphone|ipad|ipod/i.test(navigator.userAgent)) {
+      alert("Buka menggunakan Safari → Share → Add to Home Screen.");
+    } else {
+      alert("Buka menu Chrome ⋮ dan pilih Install app atau Add to Home screen jika tersedia.");
+    }
+  });
+})();
+
+</script>
 </body>
 </html>
