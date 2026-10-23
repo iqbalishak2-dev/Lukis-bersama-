@@ -81,7 +81,8 @@ function stateObj(R) {
   };
 }
 function broadcastState(R) { broadcast(R, stateObj(R)); }
-const canDrawNow = (R, cid) => R.phase === 'lobby' || (R.phase === 'playing' && cid === R.drawer);
+const canDrawNow = (R, cid) =>
+  R.phase === 'playing' && cid === R.drawer;
 
 function toLobby(R, msg) {
   clearTimeout(R.revealT);
@@ -124,26 +125,32 @@ function beginTurn(R) {
   if (R.phase === 'finished') return;
 
   const player = R.clients.get(R.drawer);
+
   if (!player) return nextTurn(R);
 
-  // Kekalkan lukisan terdahulu.
-  // Jangan kosongkan R.strokes di sini.
+  // Kekalkan semua lukisan terdahulu.
   R.endsAt = Date.now() + ROUND * 1000;
   R.phase = 'playing';
 
   broadcastState(R);
 
-  // Tema dikongsi oleh semua pemain dalam mod ini.
+  // Maklumat tema untuk mod lukisan sambungan.
   broadcast(R, {
     t: 'theme',
     theme: R.word
+  });
+
+  // Event word diperlukan oleh frontend asal.
+  sendTo(player, {
+    t: 'word',
+    w: R.word
   });
 
   sys(
     R,
     '✏️ ' + player.name +
     ' menyambung lukisan (' +
-    R.roundNo + '/' + R.order.length + ').'
+    R.roundNo + '/' + TOTAL_TURNS + ').'
   );
 }
 function endTurn(R) {
@@ -230,6 +237,7 @@ function handle(R, cid, m) {
   }
 
 function leave(R, cid, res) {
+}
   const c = R.clients.get(cid);
   if (!c || c.res !== res) return;
   R.clients.delete(cid);
