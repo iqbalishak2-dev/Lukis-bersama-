@@ -152,17 +152,48 @@ function renderState(){
  const pl=document.getElementById('pl');pl.innerHTML='';
  S.players.forEach(p=>{const d=document.createElement('span');d.className='chip';const i=document.createElement('i');i.style.background=p.color;d.appendChild(i);
   d.appendChild(document.createTextNode(p.name+(p.id===CID?' (anda)':'')+(p.id===S.drawer&&S.phase==='playing'?' ✏️':'')+(p.guessed?' ✅':'')+' · '+p.score));pl.appendChild(d);});
- document.getElementById('st').style.display=(S.phase==='lobby'&&S.players.length>=2)?'':'none';
+ const startButton = document.getElementById('st');
+
+const canStart =
+  (S.phase === 'lobby' || S.phase === 'finished') &&
+  S.players.length >= 2;
+
+startButton.style.display = canStart ? '' : 'none';
+startButton.textContent =
+  S.phase === 'finished' ? 'Main Lagi' : 'Mula main';
  wrap.classList.toggle('lock',!canDraw());
  if(S.phase!=='playing'||S.drawer!==CID)wordMine='';
  tick();}
-function tick(){const el=document.getElementById('it');
- if(S.phase==='lobby')el.textContent=S.players.length<2?'Menunggu pemain lain… lukis bebas dahulu':'Semua sedia? Ketuk Mula main';
- else if(S.phase==='playing'){const left=Math.max(0,Math.ceil((ends-Date.now())/1000));
-  el.textContent=S.drawer===CID?('Lukis: '+wordMine.toUpperCase()+' · '+left+'s'):((S.drawerName||'')+' melukis · '+S.hint+' · '+left+'s');}
- else el.textContent='Giliran seterusnya sebentar lagi…';}
-setInterval(tick,500);
-const HEX=/^#[0-9a-f]{6}$/i;
+function tick() {
+  const el = document.getElementById('it');
+
+  if (S.phase === 'lobby') {
+    el.textContent = S.players.length < 2
+      ? 'Menunggu sekurang-kurangnya 2 pemain…'
+      : 'Semua sedia? Ketuk Mula main';
+  } else if (S.phase === 'playing') {
+    const left = Math.max(
+      0,
+      Math.ceil((ends - Date.now()) / 1000)
+    );
+
+    const turnText = S.drawer === CID
+      ? 'Giliran anda menyambung lukisan'
+      : (S.drawerName || 'Pemain') + ' sedang melukis';
+
+    el.textContent =
+      'Pusingan ' + S.round + '/' + S.rounds +
+      ' · Tema: ' + (S.theme || 'Lukisan bebas') +
+      ' · ' + turnText + ' · ' + left + 's';
+  } else if (S.phase === 'reveal') {
+    el.textContent = 'Giliran selesai! Pemain seterusnya bersedia…';
+  } else if (S.phase === 'finished') {
+    el.textContent =
+      '🎉 Permainan tamat! Lukisan akhir boleh disimpan.';
+  } else {
+    el.textContent = 'Bersedia…';
+  }
+}
 function valid(s){return s&&HEX.test(s.c||'')&&(s.bg===1||[s.a,s.b,s.x,s.y,s.w].every(Number.isFinite));}
 function connect(){
  const es=new EventSource('/events?cid='+CID+'&name='+encodeURIComponent(NAME)+'&room='+ROOM);
