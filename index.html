@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lukis Bersama</title>
+<style>
+:root{--bg:#faf7f2;--surface:#fff;--text:#2a2622;--muted:#7a7167;--accent:#e8590c;--line:#e4ddd2;
+padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root{--bg:#1c1a18;--surface:#2a2724;--text:#f0ebe3;--muted:#a1978a;--accent:#ff8a4c;--line:#3d3833;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;display:flex;flex-direction:column;align-items:center;gap:10px;padding:12px;min-height:100vh}
+h1{font-size:1.2rem;margin:0}
+.w{width:100%;max-width:560px}
+#info{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px;font-weight:600;display:flex;justify-content:space-between;align-items:center;gap:8px}
+#pl{display:flex;gap:6px;flex-wrap:wrap}
+.chip{background:var(--surface);border:1px solid var(--line);border-radius:99px;padding:4px 10px;font-size:.8rem;display:flex;align-items:center;gap:6px}
+.chip i{width:10px;height:10px;border-radius:50%;display:inline-block}
+#wrap{position:relative;aspect-ratio:1;background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;touch-action:none}
+#wrap.lock{opacity:.85;outline:3px dashed var(--line);outline-offset:-3px}
+canvas{width:100%;height:100%;display:block;touch-action:none}
+#pv{position:absolute;inset:0;pointer-events:none}
+.bar{display:flex;gap:7px;flex-wrap:wrap;align-items:center;justify-content:center}
+.sw{width:30px;height:30px;border-radius:50%;border:3px solid var(--surface);box-shadow:0 0 0 1px var(--line);cursor:pointer;padding:0}
+.sw.on{box-shadow:0 0 0 3px var(--text)}
+#cp{width:34px;height:34px;padding:0;border:0;background:none;cursor:pointer}
+button.t{background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:8px 11px;font-size:.88rem;cursor:pointer}
+button.t.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+button.p{background:var(--accent);color:#fff;border:0;border-radius:10px;padding:9px 16px;font-size:.95rem;font-weight:600;cursor:pointer}
+input[type=range]{width:100px;accent-color:var(--accent)}
+#log{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px 12px;height:130px;overflow-y:auto;font-size:.88rem;display:flex;flex-direction:column;gap:3px}
+#log .sys{color:var(--accent);font-weight:600}
+#log b{color:var(--muted)}
+.row{display:flex;gap:8px}
+.row input{flex:1;min-width:0;border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:10px;padding:10px 12px;font-size:1rem}
+#ov{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;z-index:9}
+#ov input{border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:10px;padding:12px;font-size:1.1rem;width:100%;max-width:300px;text-align:center}
+</style>
+</head>
+<body>
+<div id="ov"><h1 style="font-size:1.6rem">🎨 Lukis Bersama</h1><div>Siapa nama anda?</div><input id="nm" maxlength="14" placeholder="Nama anda" autocomplete="off"><button class="p" id="go">Masuk</button></div>
+<h1>🎨 Lukis Bersama</h1>
+<div class="w" id="pl"></div>
+<div class="w" id="info"><span id="it">Menyambung…</span><button class="p" id="st" style="display:none">Mula main</button></div>
+<div class="w" id="wrap"><canvas id="c" width="1000" height="1000"></canvas><canvas id="pv" width="1000" height="1000"></canvas></div>
+<div class="w bar" id="tools">
+<button class="t" data-tool="pen">✏️ Pensel</button>
+<button class="t" data-tool="erase">🧽 Padam</button>
+<button class="t" data-tool="line">╱ Garis</button>
+<button class="t" data-tool="rect">▭ Kotak</button>
+<button class="t" data-tool="circ">◯ Bulatan</button>
+</div>
+<div class="w bar" id="cols"></div>
+<div class="w bar">
+<input type="range" id="sz" min="2" max="40" value="8" aria-label="Saiz berus">
+<input type="color" id="cp" value="#222222" aria-label="Warna pilihan sendiri">
+<button class="t" id="bg">🪣 Cat penuh</button>
+</div>
+<div class="w bar">
+<button class="t" id="un">↩️ Undur</button>
+<button class="t" id="sv">💾 Simpan gambar</button>
+<button class="t" id="cl">🗑️ Kosongkan</button>
+</div>
+<div class="w" id="log"></div>
+<div class="w row"><input id="ch" maxlength="60" placeholder="Teka / sembang di sini…" autocomplete="off"><button class="p" id="sd">Hantar</button></div>
+<script>
+const COLS=["#222222","#868e96","#8d5524","#e03131","#f76707","#fcc419","#8ce99a","#2f9e44","#74c0fc","#1c7ed6","#9c36b5","#e64980"];
+const cv=document.getElementById('c'),ctx=cv.getContext('2d'),pv=document.getElementById('pv'),pctx=pv.getContext('2d');
+[ctx,pctx].forEach(x=>{x.lineCap='round';x.lineJoin='round';});
+const CID=Math.random().toString(36).slice(2,10);
+let NAME='',color=COLS[0],tool='pen',drawing=false,last=null,start=null,curK='',kn=0,buf=[],all=[],S={phase:'lobby',players:[],drawer:null},wordMine='',ends=0;
+const sz=document.getElementById('sz'),wrap=document.getElementById('wrap');
+function canDraw(){return S.phase==='lobby'||(S.phase==='playing'&&S.drawer===CID);}
+function seg(s,c){c=c||ctx;c.strokeStyle=s.e?'#ffffff':s.c;c.lineWidth=s.w;c.beginPath();c.moveTo(s.a,s.b);c.lineTo(s.x,s.y);c.stroke();}
+function drawItem(s){if(s.bg){ctx.fillStyle=s.c;ctx.fillRect(0,0,1000,1000);}else seg(s);}
+function clearC(){ctx.fillStyle='#fff';ctx.fillRect(0,0,1000,1000);}
+function redraw(){clearC();all.forEach(drawItem);}
+function keep(s){all.push(s);if(all.length>80000)all.shift();}
+function pos(e){const r=cv.getBoundingClientRect();return[(e.clientX-r.left)/r.width*1000,(e.clientY-r.top)/r.height*1000];}
+function post(m){m.cid=CID;fetch('/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(m)}).catch(()=>{});}
+function mk(a,b,x,y){return{a:Math.round(a),b:Math.round(b),x:Math.round(x),y:Math.round(y),c:color,w:+sz.value,e:0,k:curK};}
+function shapeSegs(t,p,q){
+ if(t==='line')return[mk(p[0],p[1],q[0],q[1])];
+ if(t==='rect')return[mk(p[0],p[1],q[0],p[1]),mk(q[0],p[1],q[0],q[1]),mk(q[0],q[1],p[0],q[1]),mk(p[0],q[1],p[0],p[1])];
+ const cx=(p[0]+q[0])/2,cy=(p[1]+q[1])/2,rx=Math.abs(q[0]-p[0])/2,ry=Math.abs(q[1]-p[1])/2,N=48,out=[];
+ for(let i=0;i<N;i++){const a1=i/N*2*Math.PI,a2=(i+1)/N*2*Math.PI;out.push(mk(cx+rx*Math.cos(a1),cy+ry*Math.sin(a1),cx+rx*Math.cos(a2),cy+ry*Math.sin(a2)));}
+ return out;}
+function isShape(){return tool==='line'||tool==='rect'||tool==='circ';}
+cv.addEventListener('pointerdown',e=>{if(!canDraw())return;drawing=true;cv.setPointerCapture(e.pointerId);curK=CID+':'+(++kn);start=pos(e);last=start;if(!isShape())addSeg(start,start);});
+cv.addEventListener('pointermove',e=>{if(!drawing)return;const p=pos(e);
+ if(isShape()){last=p;pctx.clearRect(0,0,1000,1000);shapeSegs(tool,start,p).forEach(s=>seg(s,pctx));}
+ else{addSeg(last,p);last=p;}});
+function finish(){if(!drawing)return;drawing=false;
+ if(isShape()){pctx.clearRect(0,0,1000,1000);shapeSegs(tool,start,last).forEach(s=>{seg(s);keep(s);buf.push(s);});}
+ flush();}
+cv.addEventListener('pointerup',finish);
+cv.addEventListener('pointercancel',finish);
+function addSeg(p,q){const s={a:Math.round(p[0]),b:Math.round(p[1]),x:Math.round(q[0]),y:Math.round(q[1]),c:color,w:+sz.value,e:tool==='erase'?1:0,k:curK};seg(s);keep(s);buf.push(s);}
+function flush(){while(buf.length){post({t:'lukis',s:buf.splice(0,60)});}}
+setInterval(flush,70);
+// warna
+const cols=document.getElementById('cols'),cp=document.getElementById('cp');
+COLS.forEach(c=>{const b=document.createElement('button');b.className='sw';b.style.background=c;b.setAttribute('aria-label',c);b.onclick=()=>{color=c;cp.value=c;if(tool==='erase')tool='pen';mark();};cols.appendChild(b);});
+cp.addEventListener('input',()=>{color=cp.value;if(tool==='erase')tool='pen';mark();});
+document.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>{tool=b.dataset.tool;mark();});
+function mark(){[...cols.children].forEach((b,i)=>b.classList.toggle('on',tool!=='erase'&&COLS[i]===color));
+ document.querySelectorAll('[data-tool]').forEach(b=>b.classList.toggle('on',b.dataset.tool===tool));}
+mark();
+document.getElementById('bg').onclick=()=>{if(!canDraw())return;const s={bg:1,c:color,k:CID+':'+(++kn)};drawItem(s);keep(s);buf.push(s);flush();};
+document.getElementById('un').onclick=()=>{if(canDraw())post({t:'undo'});};
+document.getElementById('sv').onclick=()=>{cv.toBlob(b=>{if(!b)return;const u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='lukisan-'+Date.now()+'.png';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),4000);line('💾 Gambar disimpan ke peranti anda.','sys');},'image/png');};
+clearC();
+let clT=null;const clB=document.getElementById('cl');
+clB.onclick=()=>{if(!canDraw())return;if(!clT){clB.textContent='⚠️ Ketuk lagi';clT=setTimeout(()=>{clT=null;clB.textContent='🗑️ Kosongkan';},3000);return;}
+ clearTimeout(clT);clT=null;clB.textContent='🗑️ Kosongkan';all=[];clearC();post({t:'padam'});};
+const log=document.getElementById('log');
+function line(txt,cls,who){const d=document.createElement('div');if(cls)d.className=cls;if(who){const b=document.createElement('b');b.textContent=who+': ';d.appendChild(b);}d.appendChild(document.createTextNode(txt));log.appendChild(d);while(log.children.length>60)log.removeChild(log.firstChild);log.scrollTop=log.scrollHeight;}
+function sendChat(){const i=document.getElementById('ch');const m=i.value.trim();if(!m)return;i.value='';post({t:'guess',m});}
+document.getElementById('sd').onclick=sendChat;
+document.getElementById('ch').addEventListener('keydown',e=>{if(e.key==='Enter')sendChat();});
+document.getElementById('st').onclick=()=>post({t:'start'});
+function renderState(){
+ const pl=document.getElementById('pl');pl.innerHTML='';
+ S.players.forEach(p=>{const d=document.createElement('span');d.className='chip';const i=document.createElement('i');i.style.background=p.color;d.appendChild(i);
+  d.appendChild(document.createTextNode(p.name+(p.id===CID?' (anda)':'')+(p.id===S.drawer&&S.phase==='playing'?' ✏️':'')+(p.guessed?' ✅':'')+' · '+p.score));pl.appendChild(d);});
+ document.getElementById('st').style.display=(S.phase==='lobby'&&S.players.length>=2)?'':'none';
+ wrap.classList.toggle('lock',!canDraw());
+ if(S.phase!=='playing'||S.drawer!==CID)wordMine='';
+ tick();}
+function tick(){const el=document.getElementById('it');
+ if(S.phase==='lobby')el.textContent=S.players.length<2?'Menunggu pemain lain… lukis bebas dahulu':'Semua sedia? Ketuk Mula main';
+ else if(S.phase==='playing'){const left=Math.max(0,Math.ceil((ends-Date.now())/1000));
+  el.textContent=S.drawer===CID?('Lukis: '+wordMine.toUpperCase()+' · '+left+'s'):((S.drawerName||'')+' melukis · '+S.hint+' · '+left+'s');}
+ else el.textContent='Giliran seterusnya sebentar lagi…';}
+setInterval(tick,500);
+const HEX=/^#[0-9a-f]{6}$/i;
+function valid(s){return s&&HEX.test(s.c||'')&&(s.bg===1||[s.a,s.b,s.x,s.y,s.w].every(Number.isFinite));}
+function connect(){
+ const es=new EventSource('/events?cid='+CID+'&name='+encodeURIComponent(NAME));
+ es.onmessage=ev=>{let m;try{m=JSON.parse(ev.data);}catch(e){return;}
+  if(m.t==='init'){all=(m.strokes||[]).filter(valid);redraw();}
+  else if(m.t==='lukis'){if(m.cid===CID)return;(m.s||[]).forEach(s=>{if(valid(s)){keep(s);drawItem(s);}});}
+  else if(m.t==='padam'){if(m.cid!==CID){all=[];clearC();}}
+  else if(m.t==='undo'){all=all.filter(s=>s.k!==m.k);redraw();}
+  else if(m.t==='state'){S=m;ends=Date.now()+(m.left||0)*1000;renderState();}
+  else if(m.t==='word'){wordMine=String(m.w||'');tick();}
+  else if(m.t==='chat')line(m.m,'',m.n);
+  else if(m.t==='sys')line(m.m,'sys');};
+ es.onerror=()=>{document.getElementById('it').textContent='Terputus, cuba sambung semula…';};
+}
+const nm=document.getElementById('nm');
+try{nm.value=localStorage.getItem('lb_name')||'';}catch(e){}
+function go(){NAME=(nm.value.trim()||('Pemain'+Math.floor(Math.random()*90+10))).slice(0,14);try{localStorage.setItem('lb_name',NAME);}catch(e){}
+ document.getElementById('ov').style.display='none';connect();}
+document.getElementById('go').onclick=go;
+nm.addEventListener('keydown',e=>{if(e.key==='Enter')go();});
+</script>
+</body>
+</html>
