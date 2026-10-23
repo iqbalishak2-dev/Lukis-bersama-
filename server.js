@@ -234,21 +234,34 @@ function handle(R, cid, m) {
     n: c.name,
     m: text
   });
+    
   }
+}
 
 function leave(R, cid, res) {
-}
   const c = R.clients.get(cid);
   if (!c || c.res !== res) return;
+
   R.clients.delete(cid);
+
   if (R.clients.size === 0) armIdle(R);
-  if (R.phase !== 'lobby') {
-    if (R.clients.size < 2) return toLobby(R, 'Pemain tak cukup, kembali ke lobi.');
-    if (R.phase === 'playing' && cid === R.drawer) { sys(R, c.name + ' keluar.'); endTurn(R); return; }
+
+  if (R.phase !== 'lobby' && R.phase !== 'finished') {
+    if (R.clients.size < 2) {
+      return toLobby(R, 'Pemain tak cukup, kembali ke lobi.');
+    }
+
+    if (R.phase === 'playing' && cid === R.drawer) {
+      sys(R, c.name + ' keluar.');
+      endTurn(R);
+      return;
+    }
   }
+
   broadcastState(R);
   checkAll(R);
 }
+  
 
 function json(res, obj) {
   res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
