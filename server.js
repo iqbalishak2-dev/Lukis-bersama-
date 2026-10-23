@@ -5,9 +5,10 @@ const fs = require('fs');
 const path = require('path'); 
 require('./pwa');
 const PORT = process.env.PORT || 3000;
-const ROUND = 80;        // saat setiap giliran
-const REVEAL = 5;        // saat tunjuk jawapan
-const MAX_PLAYERS = 12;  // pemain setiap bilik
+const ROUND = 20;       // 20 saat setiap giliran
+const REVEAL = 2;       // 2 saat untuk pertukaran giliran
+const MAX_PLAYERS = 8;  // maksimum 8 pemain
+const TOTAL_TURNS = 10; // 10 giliran keseluruhan
 const MAX_ROOMS = 200;
 const IDLE_MS = 10 * 60 * 1000; // bilik kosong dipadam selepas 10 minit
 const WORDS = ["rumah","kucing","pantai","roket","pokok","robot","gunung","kapal","bandar","taman","payung","basikal","bulan","matahari","ikan","burung","kereta","pisang","buku","jam","kasut","topi","bunga","lampu","tangga","jambatan","gajah","harimau","durian","layang-layang","pelangi","telefon","kerusi","katil","pintu","tingkap","mangkuk","sudu","kuih","kopi"];
@@ -56,12 +57,27 @@ function broadcast(R, obj) { for (const c of R.clients.values()) sendTo(c, obj);
 function sys(R, m) { broadcast(R, { t: 'sys', m }); }
 function stateObj(R) {
   const d = R.clients.get(R.drawer);
+
   return {
-    t: 'state', phase: R.phase, drawer: R.drawer, drawerName: d ? d.name : '',
-    hint: R.word.split('').map(ch => ch === ' ' ? ' ' : '_').join(' '),
-    left: R.phase === 'playing' ? Math.max(0, Math.round((R.endsAt - Date.now()) / 1000)) : 0,
-    round: R.roundNo, rounds: R.order.length,
-    players: [...R.clients].map(([id, c]) => ({ id, name: c.name, color: c.color, score: sc(R, id), guessed: R.guessed.has(id) }))
+    t: 'state',
+    phase: R.phase,
+    mode: 'lukisan-sambungan',
+    drawer: R.drawer,
+    drawerName: d ? d.name : '',
+    theme: R.word,
+    hint: '',
+    left: R.phase === 'playing'
+      ? Math.max(0, Math.ceil((R.endsAt - Date.now()) / 1000))
+      : 0,
+    round: R.roundNo,
+    rounds: R.order.length,
+    players: [...R.clients].map(([id, c]) => ({
+      id,
+      name: c.name,
+      color: c.color,
+      score: sc(R, id),
+      guessed: false
+    }))
   };
 }
 function broadcastState(R) { broadcast(R, stateObj(R)); }
@@ -75,34 +91,71 @@ function toLobby(R, msg) {
   broadcastState(R);
 }
 function endGame(R) {
-  const ranked = [...R.clients].map(([id, c]) => ({ n: c.name, s: sc(R, id) })).sort((a, b) => b.s - a.s);
-  const top = ranked.length ? ranked[0] : null;
-  toLobby(R, top ? '🏆 Tamat! Pemenang: ' + top.n + ' (' + top.s + ' markah). Ketuk Mula main untuk ulang.' : 'Tamat!');
+  clearTimeout(R.revealT);
+
+  R.phase = 'finished';
+  R.drawer = null;
+  R.endsAt = 0;
+
+  sys(R, '🎉 Permainan tamat! Lukisan sambungan berjaya disiapkan.');
+  broadcastState(R);
 }
 function nextTurn(R) {
   clearTimeout(R.revealT);
-  if (R.clients.size < 2) return toLobby(R, 'Pemain tak cukup, kembali ke lobi.');
-  while (R.roundNo < R.order.length) {
-    const id = R.order[R.roundNo]; R.roundNo++;
-    if (R.clients.has(id)) { R.drawer = id; return beginTurn(R); }
+
+  if (R.clients.size < 2) {
+    return toLobby(R, 'Pemain tak cukup. Kembali ke lobi.');
   }
+
+  while (R.roundNo < R.order.length) {
+    const id = R.order[R.roundNo];
+    R.roundNo++;
+
+    if (R.clients.has(id)) {
+      R.drawer = id;
+      return beginTurn(R);
+    }
+  }
+
   endGame(R);
 }
+
 function beginTurn(R) {
-  R.word = WORDS[Math.floor(Math.random() * WORDS.length)];
-  R.guessed.clear(); R.strokes = [];
+  if (R.phase === 'finished') return;
+
+  const player = R.clients.get(R.drawer);
+  if (!player) return nextTurn(R);
+
+  // Kekalkan lukisan terdahulu.
+  // Jangan kosongkan R.strokes di sini.
   R.endsAt = Date.now() + ROUND * 1000;
   R.phase = 'playing';
-  broadcast(R, { t: 'padam', cid: '' });
+
   broadcastState(R);
-  sendTo(R.clients.get(R.drawer), { t: 'word', w: R.word });
-  sys(R, '✏️ Giliran ' + R.clients.get(R.drawer).name + ' melukis! (' + R.roundNo + '/' + R.order.length + ')');
+
+  // Tema dikongsi oleh semua pemain dalam mod ini.
+  broadcast(R, {
+    t: 'theme',
+    theme: R.word
+  });
+
+  sys(
+    R,
+    '✏️ ' + player.name +
+    ' menyambung lukisan (' +
+    R.roundNo + '/' + R.order.length + ').'
+  );
 }
 function endTurn(R) {
   if (R.phase !== 'playing') return;
+
   R.phase = 'reveal';
-  sys(R, 'Perkataan tadi: ' + R.word.toUpperCase() + ' (ketuk 💾 sekarang kalau mahu simpan lukisan)');
+  R.endsAt = 0;
+
+  sys(R, '⏱️ Giliran selesai! Bersedia untuk pemain seterusnya.');
   broadcastState(R);
+
+  clearTimeout(R.revealT);
   R.revealT = setTimeout(() => nextTurn(R), REVEAL * 1000);
 }
 function checkAll(R) {
@@ -132,30 +185,49 @@ function handle(R, cid, m) {
     R.strokes = R.strokes.filter(s => s.k !== k);
     broadcast(R, { t: 'undo', k });
   } else if (m.t === 'start') {
-    if (R.phase !== 'lobby' || R.clients.size < 2) return;
-    R.order = [...R.clients.keys()].sort(() => Math.random() - 0.5);
-    R.roundNo = 0; R.scoreMem.clear();
-    sys(R, 'Permainan bermula! Setiap pemain dapat satu giliran melukis.');
-    nextTurn(R);
-  } else if (m.t === 'guess' && typeof m.m === 'string') {
-    const text = m.m.trim().slice(0, 60);
-    if (!text) return;
-    if (R.phase === 'playing') {
-      const hit = norm(text) === norm(R.word);
-      if (cid !== R.drawer && !R.guessed.has(cid) && hit) {
-        const pts = Math.max(30, Math.round((R.endsAt - Date.now()) / (ROUND * 10)));
-        R.scoreMem.set(cid, sc(R, cid) + pts);
-        R.scoreMem.set(R.drawer, sc(R, R.drawer) + 20);
-        R.guessed.add(cid);
-        sys(R, '✅ ' + c.name + ' meneka betul! (+' + pts + ')');
-        broadcastState(R);
-        return checkAll(R);
-      }
-      if ((cid === R.drawer || R.guessed.has(cid)) && norm(text).includes(norm(R.word))) return;
-    }
-    broadcast(R, { t: 'chat', n: c.name, m: text });
+  if (
+    (R.phase !== 'lobby' && R.phase !== 'finished') ||
+    R.clients.size < 2
+  ) return;
+
+  // Susun pemain secara rawak.
+  const players = [...R.clients.keys()];
+
+  for (let i = players.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [players[i], players[j]] = [players[j], players[i]];
   }
-}
+
+  // Tepat 10 giliran; giliran diagihkan antara pemain.
+  R.order = Array.from(
+    { length: TOTAL_TURNS },
+    (_, i) => players[i % players.length]
+  );
+
+  R.roundNo = 0;
+  R.scoreMem.clear();
+  R.guessed.clear();
+
+  // Kosongkan kanvas sekali sahaja pada permulaan permainan.
+  R.strokes = [];
+  broadcast(R, { t: 'padam', cid: '' });
+
+  // Tetapkan satu tema untuk keseluruhan permainan.
+  R.word = WORDS[Math.floor(Math.random() * WORDS.length)];
+
+  sys(R, '🎨 Mod Lukisan Sambungan bermula! 10 giliran, 20 saat setiap giliran.');
+  nextTurn(R);
+  } else if (m.t === 'guess' && typeof m.m === 'string') {
+  const text = m.m.trim().slice(0, 60);
+  if (!text) return;
+
+  // Dalam mod ini, input digunakan untuk chat.
+  broadcast(R, {
+    t: 'chat',
+    n: c.name,
+    m: text
+  });
+  }
 
 function leave(R, cid, res) {
   const c = R.clients.get(cid);
